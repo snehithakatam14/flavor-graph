@@ -3,7 +3,8 @@
 Ingredient pairing explorer built on top of CognoDB. Discovers flavor connections and pairing chains across 39,000 recipes using multi-hop graph traversal.
 
 **Live Demo:** [https://flavor-graph-tau.vercel.app](https://flavor-graph-tau.vercel.app)  
-**Repository:** [https://github.com/snehithakatam14/flavor-graph](https://github.com/snehithakatam14/flavor-graph)
+**Repository:** [https://github.com/snehithakatam14/flavor-graph](https://github.com/snehithakatam14/flavor-graph)  
+**Video Demo:** [Screen Recording Link](https://drive.google.com/file/d/1GwBFwiCAYf-RNGaSMgg-Xry-Tt6Pkjx5/view?usp=sharing)
 
 ---
 

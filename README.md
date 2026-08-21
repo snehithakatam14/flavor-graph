@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+﻿# Flavor Graph
 
-## Getting Started
+Ingredient pairing explorer built on top of CognoDB. Finds flavor connections across 39k recipes using graph traversal.
 
-First, run the development server:
+**Demo:** https://flavor-graph-tau.vercel.app
 
-```bash
+---
+
+## What it does
+
+Type any ingredient, get back what it pairs well with — ranked by how often they appear together across recipes. You can also explore second-degree connections (ingredients that pair through a shared intermediate) and find recipes based on what you have at home.
+
+---
+
+## Why a graph database
+
+The interesting query here is not the direct pairings — it is finding ingredients that have never appeared in the same recipe but are still culinarily related through a chain:
+
+`
+garlic -> ginger -> lemongrass
+`
+
+Garlic and lemongrass share no recipes. But both pair strongly with ginger, which makes them indirectly compatible. Expressing this as a SQL query means two self-joins on the pairs table plus deduplication. In Cypher it is just:
+
+`cypher
+MATCH (a:Ingredient {name: })-[:PAIRS_WITH]-(mid)-[:PAIRS_WITH]-(b)
+WHERE b.name <> a.name
+RETURN DISTINCT b.name
+LIMIT 20
+`
+
+That is the core reason this project uses a graph database.
+
+---
+
+## Data model
+
+Nodes: Ingredient, Recipe
+
+Relationships:
+- PAIRS_WITH (Ingredient to Ingredient) — score based on co-occurrence: count / sqrt(freq_a * freq_b)
+- CONTAINS (Recipe to Ingredient)
+
+3,034 ingredients, 39,774 recipes, 113,633 pair edges, 421,609 containment edges.
+
+---
+
+## Queries
+
+All parameterized, no string interpolation.
+
+Direct pairings:
+`cypher
+MATCH (i:Ingredient {name: })-[p:PAIRS_WITH]-(other)
+RETURN other.name, p.score, p.shared_recipe_count
+ORDER BY p.score DESC LIMIT 15
+`
+
+2-hop chain:
+`cypher
+MATCH (a:Ingredient {name: })-[:PAIRS_WITH]-(mid)
+WITH a, mid LIMIT 8
+MATCH (mid)-[:PAIRS_WITH]-(b)
+WHERE b.name <> a.name
+RETURN DISTINCT b.name LIMIT 20
+`
+
+Recipe suggestions:
+`cypher
+MATCH (have:Ingredient)-[:PAIRS_WITH]-(sub)<-[:CONTAINS]-(r:Recipe)
+WHERE have.name IN 
+WITH r, collect(DISTINCT sub.name) AS via
+RETURN r.name, r.cuisine, via, size(via) AS score
+ORDER BY score DESC LIMIT 12
+`
+
+---
+
+## Setup
+
+Requires Node 18+, Python 3.9+, and a CognoDB instance.
+
+`ash
+git clone https://github.com/snehithakatam14/flavor-graph.git
+cd flavor-graph
+npm install
+`
+
+Add a .env.local:
+`
+NEO4J_URI=bolt+s://...
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=...
+`
+
+Download train.json from the Kaggle Recipe Ingredients Dataset and put it in data/.
+
+`ash
+python scripts/process_data.py
+node scripts/seed.js
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+## Stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 16, Tailwind CSS, neo4j-driver, CognoDB, Vercel, Python (data pipeline)
